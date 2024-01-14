@@ -1,11 +1,440 @@
-<!DOCTYPE html>
-<html lang="en">
+<html>
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RSA</title>
+  <script>
+    var newWindow = null
+
+    function to_int(s) {
+      if (typeof (s) == "number") return Math.floor(s)
+      return parseInt(s.trim())
+    }
+
+    function GCDintern(m, n) {
+      a = m % n
+      while (a != 0) {
+        m = n
+        n = a
+        a = m % n
+      }
+      return n
+    }
+
+    function GCD(m, n) {
+      if (m == 0) {
+        return n
+      }
+      if (n == 0) {
+        return m
+      }
+      if (m < 0) {
+        return GCD(-m, n)
+      }
+      if (n < 0) {
+        return GCD(m, -n)
+      }
+      if (m > n) {
+        return GCDintern(n, m)
+      }
+      return GCDintern(m, n)
+    }
+
+    function tofindE(PHI, P, Q) {
+      great = 0
+      e = 2
+      while (great != 1) {
+        e = e + 1
+        great = GCD(e, PHI)
+        PHI = (P - 1) * (Q - 1)
+      }
+      return e
+    }
+
+    function GCD_extended(m, n) {
+      var eq1 = [m, 1, 0];
+      var eq2 = [n, 0, 1];
+
+      // invariants: 
+      //   eqi[0] = eqi[1]*m + eqi[2]*n
+      while (eq2[0] != 0) {
+        q = Math.floor(eq1[0] / eq2[0])
+        t0 = eq1[0] - q * eq2[0]
+        t1 = eq1[1] - q * eq2[1]
+        t2 = eq1[2] - q * eq2[2]
+
+        eq1 = eq2
+        eq2 = [t0, t1, t2]
+      }
+
+      // eq2[0] = 0  =>  eq1[0] = gcd(m,n)
+
+      return eq1
+    }
+
+    function boxValue(box) {
+      return box.options[box.selectedIndex].value
+    }
+
+    function keys(form) {
+      var P = to_int(boxValue(form.p))
+      var Q = to_int(boxValue(form.q))
+
+      N = P * Q
+      PHI = (P - 1) * (Q - 1)
+      E = tofindE(PHI, P, Q)
+      D = GCD_extended(E, PHI)[1]
+      if (D < 0) D += PHI
+
+      form.n.value = N
+      form.phi.value = PHI
+      form.e.value = E
+      form.d.value = D
+    }
+
+    function getPublic(form) {
+      form.e1.value = form.e.value
+      form.n1.value = form.n.value
+    }
+
+    function getPrivate(form) {
+      form.d2.value = form.d.value
+      form.n2.value = form.n.value
+    }
+
+    function encode(form) {
+      form.mess1.value = boxValue(form.message)
+    }
+
+    function powMod(n, e, m) {
+      if (m == 0 || e < 0) {
+        return 0
+      }
+      res = 1
+      pow = n
+      e1 = e
+      while (e1 != 0) {
+        d = e1 % 2
+        e1 = Math.floor(e1 / 2)
+        if (d == 1) {
+          res = (res * pow) % m
+        }
+        pow = (pow * pow) % m
+      }
+
+      if (res < 0) {
+        res += m
+      }
+      return res
+    }
+
+    function encrypt(form) {
+      n = to_int(form.mess1.value)
+      e = to_int(form.e1.value)
+      m = to_int(form.n1.value)
+      form.mess2.value = powMod(n, e, m)
+    }
+
+    function getMessage(form) {
+      form.mess3.value = form.mess2.value
+    }
+
+    function decrypt(form) {
+      n = to_int(form.mess3.value)
+      e = to_int(form.d2.value)
+      m = to_int(form.n2.value)
+      form.mess4.value = powMod(n, e, m)
+    }
+
+    function decode(form) {
+      form.mess5.selectedIndex = form.mess4.value
+    }
+
+    function calcGCD(form) {
+      var m = to_int(form.m.value)
+      var n = to_int(form.n.value)
+      if (isNaN(m) || isNaN(n))
+        gcd = ""
+      else
+        gcd = GCD(m, n)
+      form.gcd.value = gcd
+    }
+
+    function calcExtGCD(form) {
+      var m = to_int(form.m.value)
+      var n = to_int(form.n.value)
+      if (isNaN(m) || isNaN(n)) {
+        gcd = ""
+        cof1 = ""
+        cof2 = ""
+      } else {
+        gcd = GCD(m, n)
+        cof1 = GCD_extended(m, n)[1]
+        cof2 = GCD_extended(m, n)[2]
+      }
+      form.gcd.value = gcd
+      form.c1.value = cof1
+      form.c2.value = cof2
+    }
+
+    function calcPowerMod(form) {
+      var n = to_int(form.n.value)
+      var e = to_int(form.e.value)
+      var m = to_int(form.m.value)
+      form.pow.value = powMod(n, e, m)
+    }
+  </script>
+  <title>RSA Demo</title>
 </head>
-<body>
-    <h1>RSA - Angewandte Kryptographie</h1>
+
+<body bgcolor="FFFFFF">
+
+  <center>
+    <h1>RSA-Algorithmus</H1>
+  </center>
+
+  <h2>Überblick</h2>
+  Die Arbeit mit einem Verschlüsselungssystem mit öffentlichem Schlüssel besteht hauptsächlich aus drei Phasen: <OL>
+    <LI><B>Schlüsselerzeugung:</B> Wer geheime Nachrichten empfangen möchte, erstellt einen öffentlichen Schlüssel
+      (der veröffentlicht wird) und ein privater Schlüssel (der geheim gehalten wird).
+      Die Schlüssel werden so erzeugt, dass ihre Konstruktion verborgen bleibt und
+      Es „schwierig“ macht, den privaten Schlüssel zu finden, wenn man nur den öffentlichen Schlüssel kennt.
+    <LI><B>Verschlüsselung:</B> Eine geheime Nachricht an eine beliebige Person kann verschlüsselt werden
+      durch seinen öffentlichen Schlüssel (der offiziell wie Telefonnummern aufgeführt werden könnte).
+    <LI><B>Entschlüsserung:</B> Nur der Angesprochene kann es problemlos
+      Entschlüsseln Sie die geheime Nachricht mit dem privaten Schlüssel.
+  </OL>
+  <hr>
+  <h2>RSA Schlüsselerzeugung</h2>
+  Aus zwei ausgewählten Primzahlen generiert der Computer die Öffentlichkeit
+  und der private Schlüssel:
+  <p>
+
+  <form>
+    Wählen Sie 2 (verschiedene) Primzahlen: &nbsp;
+    p = <select name="p">
+      <option value="7" selected>7
+      <option value="13">13
+      <option value="19">19
+      <option value="29">29
+      <option value="37">37
+    </select>
+    &nbsp;&nbsp;&nbsp;
+
+    q = <select name="q">
+      <option value="11" selected>11
+      <option value="17">17
+      <option value="23">23
+      <option value="31">31
+      <option value="41">41
+    </select>
+    &nbsp;&nbsp;&nbsp;
+    <input type="button" value="Schlüssel generieren" onClick="keys(this.form)">
+    <P>
+
+      <center>
+        <table border=0>
+          <tr>
+            <td align=left> n = <input type=text size=3 name=n> &nbsp;(n = p.q)</td>
+          </tr>
+          <tr>
+            <td align=left> &phi; = <input type=text size=3 name=phi> &nbsp;(&phi; = &phi;(n) = (p-1).(q-1); wird
+              gebraucht, um e und d zu bestimmen)</td>
+          </tr>
+          <tr>
+            <td align=left> e = <input type=text size=3 name=e> &nbsp;(beliebig, aber kleiner als n und teilerfremd zu
+              &phi;)</td>
+          </tr>
+          <tr>
+            <td align=left> d = <input type=text size=3 name=d> &nbsp;(Umkehrung von e modulo &phi;: e.d mod &phi; = 1)
+            </td>
+          </tr>
+        </table>
+      </center>
+    <P>
+
+      Aus diesen Zahlen setzen sich die Schlüssel zusammen:
+    <UL>
+      <LI>der <B>öffentliche Schlüssel</B> ist das Paar (e,n).
+      <LI>der <B>private Schlüssel</B> ist das Paar (d,n).
+    </UL>
+    Es wird nur der öffentliche Schlüssel (e,n) veröffentlicht; alle anderen beteiligten Zahlen (p,q,φ,d)
+    muss privat gehalten werden!
+    Die Haupteigenschaft dieser Konstruktion besteht darin, dass es "schwierig" ist, d nur aus den Zahlen e und n zu
+    berechnen.
+    <UL>
+      <LI> Es ist „schwierig“, d zu berechnen, ohne &phi zu kennen;.
+      <LI> Es ist „schwierig“, n in p.q zu faktorisieren (was zur Berechnung von φ benötigt wird).
+    </UL>
+
+    <hr>
+
+    <h2>RSA Verschlüsselung</h2>
+    Zunächst benötigen wir den <B>öffentlichen Schlüssel</B> der Person, zu der wir eine Nachricht senden wollen:<BR>
+    (e,n) = ( <input type=text size=3 name=e1>, <input type=text size=3 name=n1> )
+    &nbsp; &nbsp;
+    (Geben Sie entsprechende Werte ein oder
+    <input type="button" value="Nehmen den öffentlichen Schlüssel von oben" onClick="getPublic(this.form)"> )
+    <P>
+
+      Als nächstes benötigen wir die <B>Nachricht</B>. Für die Einfachheit wird nur ein Buchstabe benutzt.
+      (In sicheren Anwendungen werden Buchstaben nie einzeln, sondern in ganzen Blöcken verschlüsselt.)<BR>
+      Wählen Sie einen Buchstaben zum Verschlüsseln aus:
+      <select name="message">
+        <option value="1">A
+        <option value="2" selected>B
+        <option value="3">C
+        <option value="4">D
+        <option value="5">E
+        <option value="6">F
+        <option value="7">G
+        <option value="8">H
+        <option value="9">I
+        <option value="10">J
+        <option value="11">K
+        <option value="12">L
+        <option value="13">M
+        <option value="14">N
+        <option value="15">O
+        <option value="16">P
+        <option value="17">Q
+        <option value="18">R
+        <option value="19">S
+        <option value="20">T
+        <option value="21">U
+        <option value="22">V
+        <option value="23">W
+        <option value="24">X
+        <option value="25">Y
+        <option value="26">Z
+      </select>
+      <BR>
+
+      Bevor wir diese Buchstabe verschlüsseln können, müssen wir
+      <input type="button" value="sie als eine Nummer darstellen" onClick="encode(this.form)">:<BR>
+      m = <input type=text size=3 name=mess1> (hier nehmen wir nur den Index im Alphabet)
+    <P>
+
+      <input type="button" value="Verschlüsselung" onClick="encrypt(this.form)">
+      selbst ist sehr einfach: m' = <input type=text size=3, name=mess2> (m' = m<sup>e</sup> mod n)
+    <P>
+      Der Wert m' ist die verschlüsselte Nachricht, die an den Empfänger gesendet wird.
+      <hr>
+
+    <h2>RSA Entschlüsserung</h2>
+    Zunächst benötigen wir den <B>privaten Schlüssel</B> der Person, die die verschlüsselte Nachricht erhalten hat:<BR>
+    (d,n) = ( <input type=text size=3 name=d2>, <input type=text size=3 name=n2> )
+    &nbsp; &nbsp;
+    (Geben Sie entsprechende Werte ein oder
+    <input type="button" value="Nehmen privaten Schlüssel von oben" onClick="getPrivate(this.form)"> )
+    <P>
+
+      Als nächstes benötigen wir die verschlüsselte <B>Nachricht</B>:<BR>
+      m' = <input type=text size=3 name=mess3>
+      &nbsp; &nbsp;
+      (Geben Sie entsprechende Werte ein oder
+      <input type="button" value="Nehmen geheime Nachricht von oben" onClick="getMessage(this.form)"> )
+    <P>
+
+      <input type="button" value="Entschlüsserung" onClick="decrypt(this.form)">
+      ist ebenfalls sehr einfach: m = <input type=text size=3 name=mess4> (m = m'<sup>d</sup> mod n)
+    <P>
+
+      Die <input type="button" value="entschlüsselte Nachricht" onClick="decode(this.form)">
+      sollte mit dem oben gewählten Buchstaben übereinstimmen:
+      <select name=mess5>
+        <option value=0 selected>_
+        <option value=1>A
+        <option value=2>B
+        <option value=3>C
+        <option value=4>D
+        <option value=5>E
+        <option value=6>F
+        <option value=7>G
+        <option value=8>H
+        <option value=9>I
+        <option value=10>J
+        <option value=11>K
+        <option value=12>L
+        <option value=13>M
+        <option value=14>N
+        <option value=15>O
+        <option value=16>P
+        <option value=17>Q
+        <option value=18>R
+        <option value=19>S
+        <option value=20>T
+        <option value=21>U
+        <option value=22>V
+        <option value=23>W
+        <option value=24>X
+        <option value=25>Y
+        <option value=26>Z
+      </select>
+
+  </form>
+  <P>
+
+    <hr>
+
+  <h2>Hilfsfunktionen (zum Testen) </h2>
+  <h3>Gröter gemeinsamer Teiler (ggT)</h3>
+  Dass zwei Zahlen relativ prim sind, bedeutet, dass sie keinen gemeinsamen Teiler haben.
+  Der Divisor kann mit dem Euklidischen Algorithmus effizient berechnet werden.
+  <form>
+    m= <input type=text size=5 name="m"> &nbsp;&nbsp; n= <input type=text size=5 name="n">
+    &nbsp;&nbsp;
+    <input type="button" value="ggT berechnen" onClick="calcGCD(this.form)">
+    <p>
+      ggT(m,n) = <input type=text size=5 name=gcd>
+  </form>
+
+  <h3>Cofaktoren (erweiterte ggT)</h3>
+  Der größte gemeinsame Teiler d zweier Zahlen m und n kann als lineare Kombination dieser beiden Zahlen geschrieben
+  werden:
+  <center>
+    d = c<sub>1</sub>.m + c<sub>2</sub>.n
+  </center>
+  Die Zahlen c<sub>1</sub>,c<sub>2</sub> werden <I>Cofaktoren</I> genannt
+  und kann über eine einfache Erweiterung des Euklidischen Algorithmus berechnet werden
+  (erweiterte ggT-Berechnung).
+  <P>
+
+    Die Berechnung der Cofaktoren ist nützlich, um die (multiplikative)
+    Kehrwert einer Zahl n bzgl. ein Modul m. Gegeben seien zwei relativ Primzahlen
+    m,n, so dass ihr GCD 1 ist, haben wir für die Cofaktoren:
+    <center>
+      1 = c<sub>1</sub>.m + c<sub>2</sub>.n
+    </center>
+    Wenn wir diese Gleichung modulo m betrachten, erhalten wir: <center>
+      c<sub>2</sub>.n mod m = 1
+    </center>
+    Somit c<sub>2</sub> ist die (multiplikative) Umkehrung von n modulo m.
+
+  <form>
+    m= <input type=text size=5 name="m"> &nbsp;&nbsp; n= <input type=text size=5 name="n">
+    &nbsp;&nbsp;
+    <input type="button" value="Erweiterte ggT" onClick="calcExtGCD(this.form)">
+    <p>
+      ggT(m,n) = <input type=text size=5 name=gcd> &nbsp;&nbsp;
+      c<sub>1</sub>= <input type=text size=5 name=c1> &nbsp;&nbsp;
+      c<sub>2</sub>= <input type=text size=5 name=c2>
+  </form>
+
+  <h3>Potenzmodulo m</h3>
+  Sowohl für die Ver- als auch für die Entschlüsselung ist eine modulo-reduzierte Potenz eines Moduls m erforderlich.
+  Wenn die gesamte Potenz berechnet wird, bevor die Modulo-Berechnung beginnt,
+  kann dies sehr ineffizient sein und große Zahlen erfordern. Deshalb
+  eine effizientere Methode, bei der bereits die Zwischenpotenzen modulo m
+  verwendet.
+
+  <form>
+    n= <input type=text size=5 name="n"> &nbsp;&nbsp;
+    e= <input type=text size=5 name="e"> &nbsp;&nbsp;
+    m= <input type=text size=5 name="m"> &nbsp;&nbsp;
+    <input type="button" value="powerMod" onClick="calcPowerMod(this.form)">
+    <p>
+      n<sup>e</sup> mod m = <input type=text size=5 name=pow>
+
+  </form>
 </body>
+
 </html>
